@@ -4,6 +4,11 @@ import json
 import requests
 import secrets
 
+# Debug mode
+DEBUG = 1
+
+
+
 # TODO:
 CLIENT_ID = ""
 CLIENT_SECRET = ""
@@ -44,11 +49,14 @@ def generate_new_token(authorisation_code: str, code_verifier: str) -> dict:
 
     token = response.json()
     response.close()
-    print('Token generated successfully!')
+    if DEBUG:
+        print('Token generated successfully!')
 
     with open('token.json', 'w') as file:
         json.dump(token, file, indent = 4)
-        print('Token saved in "token.json"')
+        if DEBUG:
+            print('Token saved in "token.json"')
+    
 
     return token
 
@@ -65,6 +73,41 @@ def print_user_info(access_token: str):
     response.close()
 
     print(f"\n>>> Greetings {user['name']}! <<<")
+
+
+def get_user_anime_list(access_token: str):
+    ## TODO: Process Json data and loop
+    url = 'https://api.myanimelist.net/v2/users/@me/animelist'
+    ani_list = []
+
+    while url != "":
+        response = requests.get(url, headers = {
+            'Authorization': f'Bearer {access_token}'
+            })
+        
+        response.raise_for_status()
+        ani_list_json = response.json()
+        response.close()
+
+        with open('ani_list_json.json', 'w') as file:
+            json.dump(ani_list_json, file, indent = 4)
+            if DEBUG:
+                print('ani_list saved in "token.json"')
+
+        ## TODO: Test this
+        with open('ani_list_json.json', 'r') as file:
+            data = json.load(file)
+            if DEBUG:
+                print(f"Data in file is saved as {type(data)} type")
+
+        ani_list.append(data["data"])
+
+        pageing = data["paging"]
+        url = pageing["next"]
+        if DEBUG:
+            print(f"nNxt page page is {url}")
+
+    return ani_list
 
 
 
