@@ -120,5 +120,8 @@ def OAuth2():
 
     print_user_info(token['access_token'])
 
+    # TODO: return True or False based on succesful authorization
+    return
 
-OAuth2()
+
+# OAuth2()
