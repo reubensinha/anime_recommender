@@ -106,6 +106,8 @@ def get_user_anime_list(access_token: str):
         url = pageing["next"]
         if DEBUG:
             print(f"nNxt page page is {url}")
+        
+        ## TODO: Convert ani_list to Dataframe
 
     return ani_list
 
