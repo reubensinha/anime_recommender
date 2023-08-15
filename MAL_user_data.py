@@ -1,17 +1,19 @@
 ## Access data via MAL API
 
+import os
 import json
 import requests
 import secrets
+import pandas as pd
+
+import private
 
 # Debug mode
 DEBUG = 1
 
-
-
-# TODO:
-CLIENT_ID = ""
-CLIENT_SECRET = ""
+## CLIENT ID is gotten by registering at https://myanimelist.net/apiconfig
+CLIENT_ID = private.get_id()
+# CLIENT_SECRET = ""
 
 
 # Generate a new Code Verifier / Code Challenge.
@@ -33,12 +35,12 @@ def print_new_authorisation_url(code_challenge: str):
 #    specified in the API panel. The URL will contain a parameter named "code" (the Authorisation
 #    Code). You need to feed that code to the application.
 def generate_new_token(authorisation_code: str, code_verifier: str) -> dict:
-    global CLIENT_ID, CLIENT_SECRET
+    global CLIENT_ID #, CLIENT_SECRET
 
     url = 'https://myanimelist.net/v1/oauth2/token'
     data = {
         'client_id': CLIENT_ID,
-        'client_secret': CLIENT_SECRET,
+        # 'client_secret': CLIENT_SECRET,
         'code': authorisation_code,
         'code_verifier': code_verifier,
         'grant_type': 'authorization_code'
@@ -62,7 +64,8 @@ def generate_new_token(authorisation_code: str, code_verifier: str) -> dict:
 
 
 # Test the API by requesting your profile information
-def print_user_info(access_token: str):
+def print_user_info():
+    access_token = str(token['access_token'])
     url = 'https://api.myanimelist.net/v2/users/@me'
     response = requests.get(url, headers = {
         'Authorization': f'Bearer {access_token}'
@@ -75,9 +78,9 @@ def print_user_info(access_token: str):
     print(f"\n>>> Greetings {user['name']}! <<<")
 
 
-def get_user_anime_list(access_token: str):
-    ## TODO: Process Json data and loop
-    url = 'https://api.myanimelist.net/v2/users/@me/animelist'
+def get_user_anime_list():
+    access_token = str(token['access_token'])
+    url = 'https://api.myanimelist.net/v2/users/@me/animelist?fields=list_status'
     ani_list = []
 
     while url != "":
@@ -92,24 +95,34 @@ def get_user_anime_list(access_token: str):
         with open('ani_list_json.json', 'w') as file:
             json.dump(ani_list_json, file, indent = 4)
             if DEBUG:
-                print('ani_list saved in "token.json"')
+                print('ani_list saved in "ani_list_json.json"')
 
-        ## TODO: Test this
         with open('ani_list_json.json', 'r') as file:
             data = json.load(file)
             if DEBUG:
                 print(f"Data in file is saved as {type(data)} type")
 
-        ani_list.append(data["data"])
+        ani_list.extend(data["data"])
 
         pageing = data["paging"]
-        url = pageing["next"]
-        if DEBUG:
-            print(f"nNxt page page is {url}")
-        
-        ## TODO: Convert ani_list to Dataframe
+        try:
+            url = pageing["next"]
+        except KeyError:
+            url = ""
+        except:
+            print("Something went wrong!")
 
-    return ani_list
+        if DEBUG:
+            print(f"Next page page is {url}")
+        
+
+    if not DEBUG:
+        if os.path.exists('ani_list_json.json'):
+            os.remove('ani_list_json.json')
+    
+    ## TODO: Convert ani_list to Dataframe
+    ani_df = pd.json_normalize(ani_list)
+    return ani_df
 
 
 
@@ -117,13 +130,14 @@ def OAuth2():
     code_verifier = code_challenge = get_new_code_verifier()
     print_new_authorisation_url(code_challenge)
 
-    authorisation_code = input('Copy-paste the Authorisation Code: ').strip()
+    # TODO: Callback
+    global token
+    authorisation_code = input('Copy-paste the Authorisation Code found in url following http://localhost/oauth?code= \n: ').strip()
     token = generate_new_token(authorisation_code, code_verifier)
 
-    print_user_info(token['access_token'])
-
-    # TODO: return True or False based on succesful authorization
-    return
+    print_user_info()
 
 
-# OAuth2()
+if DEBUG:
+    OAuth2()
+    ani_df = get_user_anime_list()
