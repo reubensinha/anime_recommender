@@ -9,7 +9,7 @@ import pandas as pd
 import private
 
 # Debug mode
-DEBUG = 1
+DEBUG = 0
 
 ## CLIENT ID is gotten by registering at https://myanimelist.net/apiconfig
 CLIENT_ID = private.get_id()
@@ -64,7 +64,7 @@ def generate_new_token(authorisation_code: str, code_verifier: str) -> dict:
 
 
 # Test the API by requesting your profile information
-def print_user_info():
+def print_my_info():
     access_token = str(token['access_token'])
     url = 'https://api.myanimelist.net/v2/users/@me'
     response = requests.get(url, headers = {
@@ -78,7 +78,7 @@ def print_user_info():
     print(f"\n>>> Greetings {user['name']}! <<<")
 
 
-def get_user_anime_list():
+def get_my_anime_list():
     access_token = str(token['access_token'])
     url = 'https://api.myanimelist.net/v2/users/@me/animelist?fields=list_status'
     ani_list = []
@@ -120,7 +120,7 @@ def get_user_anime_list():
         if os.path.exists('ani_list_json.json'):
             os.remove('ani_list_json.json')
     
-    ## TODO: Convert ani_list to Dataframe
+    ## Convert ani_list to Dataframe
     ani_df = pd.json_normalize(ani_list)
     return ani_df
 
@@ -135,9 +135,9 @@ def OAuth2():
     authorisation_code = input('Copy-paste the Authorisation Code found in url following http://localhost/oauth?code= \n: ').strip()
     token = generate_new_token(authorisation_code, code_verifier)
 
-    print_user_info()
+    print_my_info()
 
 
 if DEBUG:
     OAuth2()
-    ani_df = get_user_anime_list()
+    ani_df = get_my_anime_list()
