@@ -64,7 +64,7 @@ def generate_new_token(authorisation_code: str, code_verifier: str) -> dict:
 
 
 # Test the API by requesting your profile information
-def print_my_info():
+def get_my_info():
     access_token = str(token['access_token'])
     url = 'https://api.myanimelist.net/v2/users/@me'
     response = requests.get(url, headers = {
@@ -75,7 +75,7 @@ def print_my_info():
     user = response.json()
     response.close()
 
-    print(f"\n>>> Greetings {user['name']}! <<<")
+    return user
 
 
 def get_my_anime_list():
@@ -122,11 +122,36 @@ def get_my_anime_list():
     
     ## Convert ani_list to Dataframe
     ani_df = pd.json_normalize(ani_list)
+    titles = ['anime_id', 'name', 'picture_medium', 'picture_large', 'status', 'rating', 'watched_episode', 'rewatching', 'last_updated', 'finish_date', 'start_date']
+
+    ani_df.columns = titles
+
     return ani_df
+
+
+def get_anime_info(anime_id):
+    # Returns dataframe
+    access_token = str(token['access_token'])
+    url = f'https://api.myanimelist.net/v2/anime/{anime_id}?fields=id,title,genres,synopsis'
+    response = requests.get(url, headers = {
+        'Authorization': f'Bearer {access_token}'
+        })
+    
+    response.raise_for_status()
+    anime = response.json()
+    response.close()
+
+    anime = pd.json_normalize(anime)
+    titles = ['anime_id', 'name', 'genres', 'synopsis']
+
+    anime.columns = titles
+    
+    return anime
 
 
 
 def OAuth2():
+    # TODO: Use Cached data when Auth failed
     code_verifier = code_challenge = get_new_code_verifier()
     print_new_authorisation_url(code_challenge)
 
@@ -135,7 +160,9 @@ def OAuth2():
     authorisation_code = input('Copy-paste the Authorisation Code found in url following http://localhost/oauth?code= \n: ').strip()
     token = generate_new_token(authorisation_code, code_verifier)
 
-    print_my_info()
+    user = get_my_info()
+
+    print(f"\n>>> Greetings {user['name']}! <<<")
 
 
 if DEBUG:
