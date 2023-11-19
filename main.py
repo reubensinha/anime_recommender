@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 
 
-DEBUG = 1
+DEBUG = 0
 CACHE = 1
 
 # numeric_keys = {
