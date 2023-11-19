@@ -87,7 +87,7 @@ def get_my_anime_list():
         response = requests.get(url, headers = {
             'Authorization': f'Bearer {access_token}'
             })
-        
+
         response.raise_for_status()
         ani_list_json = response.json()
         response.close()
@@ -109,17 +109,16 @@ def get_my_anime_list():
             url = pageing["next"]
         except KeyError:
             url = ""
-        except:
+        except Exception:
             print("Something went wrong!")
 
         if DEBUG:
             print(f"Next page page is {url}")
-        
 
-    if not DEBUG:
-        if os.path.exists('ani_list_json.json'):
-            os.remove('ani_list_json.json')
-    
+
+    if not DEBUG and os.path.exists('ani_list_json.json'):
+        os.remove('ani_list_json.json')
+        
     ## Convert ani_list to Dataframe
     ani_df = pd.json_normalize(ani_list)
     titles = ['anime_id', 'name', 'picture_medium', 'picture_large', 'status', 'rating', 'watched_episode', 'rewatching', 'last_updated', 'finish_date', 'start_date']
@@ -165,6 +164,6 @@ def OAuth2():
     print(f"\n>>> Greetings {user['name']}! <<<")
 
 
-if DEBUG:
-    OAuth2()
-    ani_df = get_my_anime_list()
+# if DEBUG:
+#     OAuth2()
+#     ani_df = get_my_anime_list()

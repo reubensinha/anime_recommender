@@ -7,34 +7,57 @@ import matplotlib.pyplot as plt
 from collections import defaultdict
 
 import tensorflow as tf
-from keras import layers
-from keras.models import Model
-from keras.optimizers import Adam
+from tensorflow.keras import layers                                     # type: ignore
+from tensorflow.keras.models import Model                               # type: ignore
+from tensorflow.keras.optimizers import Adam                            # type: ignore
 
-from keras.layers import Add, Activation, Lambda, BatchNormalization, Concatenate, Dropout, Input, Embedding, Dot, Reshape, Dense, Flatten
-from keras.callbacks import Callback, ModelCheckpoint, LearningRateScheduler, TensorBoard, EarlyStopping, ReduceLROnPlateau
+from tensorflow.keras.layers import Add, Activation, Lambda, BatchNormalization, Concatenate, Dropout, Input, Embedding, Dot, Reshape, Dense, Flatten       # type: ignore
+from tensorflow.keras.callbacks import Callback, ModelCheckpoint, LearningRateScheduler, TensorBoard, EarlyStopping, ReduceLROnPlateau          # type: ignore
 
 # CONSTANTS
 CHECKPOINT_FILEPATH = './weights/weights.h5'
-MY_ID = 0
-NAME = MAL_my_data.get_my_info()['name']
-DEBUG = 1
-if DEBUG:
-    SEED = 73
-else:
-    SEED = None
+# NAME = MAL_my_data.get_my_info()['name']
+DEBUG = 0
+
+SEED = 73 if DEBUG else None
 
 
-# Global variables for RecommenderNet func.
-n_users = 0
-n_animes = 0
 
 
 def combine_user_list(my_list, user_list):
-    rating_list = my_list['anime_id', 'rating']
-    rating_list['user_id'] = MY_ID
+    # sourcery skip: extract-duplicate-method
+    global MY_ID
+    MY_ID = user_list['user_id'].max() + 1
+    if DEBUG:
+        print("> Combining Lists")
 
-    rating_list = pd.concat([rating_list, user_list])
+    my_list = my_list[['anime_id', 'rating']].copy()
+    if DEBUG:
+        print("> Adding MY_ID to my_list")
+        print(my_list.head())
+        print(my_list.tail())
+        
+    my_list.insert(0, 'user_id', MY_ID)
+
+    if DEBUG:
+        print("> Created rating_list")
+        print(my_list.head())
+        print(my_list.tail())
+    
+    if DEBUG:
+        print(user_list.head())
+        print("> Existing user_list")
+        print(user_list.head())
+        print(user_list.tail())
+
+    rating_list = pd.concat([user_list, my_list], ignore_index=True)
+    
+    rating_list = rating_list.loc[rating_list['rating'] != 0]
+    
+    if DEBUG:
+        print("> Combined rating_list")
+        print(rating_list.head())
+        print(rating_list.tail())
 
     return rating_list
 
@@ -67,7 +90,7 @@ def remove_duplicates(rating_list):
     return rating_list
 
 
-def encode_categorical(rating_list):
+def encode_categorical(rating_list):  # sourcery skip: identity-comprehension
     # Encoding categorical data
     user_ids = rating_list["user_id"].unique().tolist()
     user2user_encoded = {x: i for i, x in enumerate(user_ids)}
@@ -75,33 +98,40 @@ def encode_categorical(rating_list):
     rating_list["user"] = rating_list["user_id"].map(user2user_encoded)
     n_users = len(user2user_encoded)
 
-    user_encoded = (user2user_encoded, user_encoded2user)
-
     anime_ids = rating_list["anime_id"].unique().tolist()
     anime2anime_encoded = {x: i for i, x in enumerate(anime_ids)}
     anime_encoded2anime = {i: x for i, x in enumerate(anime_ids)}
     rating_list["anime"] = rating_list["anime_id"].map(anime2anime_encoded)
     n_animes = len(anime2anime_encoded)
 
-    anime_encoded = (anime2anime_encoded, anime_encoded2anime)
-
-
     if DEBUG:
-        print(f"Num of users: {n_users}, Num of animes: {n_animes}")
-        print(f"Min rating: {min(rating_list['rating'])}, Max rating: {max(rating_list['rating'])}")
+        print(f"> Num of users: {n_users}, Num of animes: {n_animes}")
+        print(f"> Min rating: {min(rating_list['rating'])}, Max rating: {max(rating_list['rating'])}")
 
-    return rating_list, user_encoded, anime_encoded
+    return rating_list, (n_users, n_animes), (user2user_encoded, user_encoded2user), (anime2anime_encoded, anime_encoded2anime)
 
-def RecommenderNet():
+
+def RecommenderNet(nums):
+    n_users, n_animes = nums
+
     # Embedding Layers
+    if DEBUG:
+        print("> RecommenderNet")
+
     embedding_size = 128
     
     user = Input(name = 'user', shape = [1])
+    if DEBUG:
+        print("> user_embedding")
     user_embedding = Embedding(name = 'user_embedding',
                        input_dim = n_users, 
                        output_dim = embedding_size)(user)
+    if DEBUG:
+        print(f"> {user_embedding}")
     
     anime = Input(name = 'anime', shape = [1])
+    if DEBUG:
+        print("> anime_embedding")
     anime_embedding = Embedding(name = 'anime_embedding',
                        input_dim = n_animes, 
                        output_dim = embedding_size)(anime)
@@ -120,7 +150,7 @@ def RecommenderNet():
     return model
 
 
-def lrfn(epoch):
+def lrfn(epoch):  # sourcery skip: move-assign
     start_lr = 0.00001
     min_lr = 0.00001
     max_lr = 0.00005
@@ -149,13 +179,21 @@ def callbacks():
     early_stopping = EarlyStopping(patience = 3, monitor='val_loss', 
                                 mode='min', restore_best_weights=True)
 
-    my_callbacks = [
+    return [
         model_checkpoints,
         lr_callback,
-        early_stopping,   
+        early_stopping,
     ]
 
-    return my_callbacks
+
+def plot_results(history):
+    plt.plot(history.history["loss"][:-2])
+    plt.plot(history.history["val_loss"][:-2])
+    plt.title("model loss")
+    plt.ylabel("loss")
+    plt.xlabel("epoch")
+    plt.legend(["train", "test"], loc="upper left")
+    plt.show()
 
 
 def extract_weights(name, model):
@@ -167,31 +205,29 @@ def extract_weights(name, model):
 
 
 def find_similar_users(item_input, user_encoded, user_weights, n=10,return_dist=False, neg=False):
+    # sourcery skip: move-assign
     user2user_encoded, user_encoded2user = user_encoded
 
     try:
         index = item_input
         encoded_index = user2user_encoded.get(index)
         weights = user_weights
-    
+
         dists = np.dot(weights, weights[encoded_index])
         sorted_dists = np.argsort(dists)
-        
+
         n = n + 1
-        
-        if neg:
-            closest = sorted_dists[:n]
-        else:
-            closest = sorted_dists[-n:]
+
+        closest = sorted_dists[:n] if neg else sorted_dists[-n:]
 
         if DEBUG:
             print(f'> users similar to #{item_input}')
 
         if return_dist:
             return dists, closest
-        
+
         SimilarityArr = []
-        
+
         for close in closest:
             similarity = dists[close]
 
@@ -200,13 +236,11 @@ def find_similar_users(item_input, user_encoded, user_weights, n=10,return_dist=
                 SimilarityArr.append({"similar_users": decoded_id, 
                                       "similarity": similarity})
 
-        Frame = pd.DataFrame(SimilarityArr).sort_values(by="similarity", 
-                                                        ascending=False)
-        
-        return Frame
-    
-    except:
-        print(f'{NAME}!, Not Found in User list')
+        return pd.DataFrame(SimilarityArr).sort_values(
+            by="similarity", ascending=False
+        )
+    except Exception:
+        print(f'{MAL_my_data.get_my_info()["name"]}!, Not Found in User list')
 
 
 def get_user_preferences(user_id, rating_list, verbose=0):
@@ -239,6 +273,7 @@ def get_user_preferences(user_id, rating_list, verbose=0):
 
 
 def get_recommended_animes(similar_users, rating_list, n=10):
+    global MY_ID
     recommended_animes = pd.DataFrame(columns= ['anime_id', 'name', 'genres', 'synopsis', 'size'])
     anime_list = pd.DataFrame(columns= ['anime_id'])
 
@@ -279,12 +314,16 @@ def get_recommended_animes(similar_users, rating_list, n=10):
     return recommended_animes
 
 
-def rec_anime(ani_list, my_list, user_list):
+def rec_anime(ani_list, my_list, rating_list):
+    global MY_ID
+    
     ## ani_list, my_list and rating_list are all dataframes
     if DEBUG:
         print("rec_anime func.")
     
-    rating_list = combine_user_list(my_list, user_list)
+    rating_list = combine_user_list(my_list, rating_list)
+    # if DEBUG:
+    #     print("Lists Combined")
     
 
     ## Pre-Processing
@@ -293,14 +332,20 @@ def rec_anime(ani_list, my_list, user_list):
 
     # Removing Duplicated Rows
     rating_list = remove_duplicates(rating_list)
-
+    
+    # if DEBUG:
+    #     crosstab(rating_list)
+    
     # Encoding categorical data
-    rating_list, user_encoded, anime_encoded = encode_categorical(rating_list)
-
+    rating_list, nums, user_encoded, anime_encoded = encode_categorical(rating_list)
+    
     # Shuffle
     rating_list = rating_list.sample(frac=1, random_state=SEED)
+    
 
-    X = rating_list[['user_id', 'anime_id']].values
+    
+
+    X = rating_list[['user', 'anime']].values
     y = rating_list["rating"]
 
     # Split
@@ -323,16 +368,22 @@ def rec_anime(ani_list, my_list, user_list):
     
     ## Build Model
     # Embedding Layers
-    model = RecommenderNet()
+    model = RecommenderNet(nums)
     if DEBUG:
         model.summary()
 
     # Callbacks
     batch_size = 10000
-
     my_callbacks = callbacks()
 
     # Model training
+    if DEBUG:
+        print("> fitting")
+        print((f"> params: \n\t X_train_array: {len(X_train_array[0])}, {len(X_train_array[1])}"
+               f"> {X_train_array}"
+               f"\n\t > y_train: {len(y_train)}"
+               f"\n\t > batch_size: {batch_size}"))
+    
     history = model.fit(
         x=X_train_array,
         y=y_train,
@@ -346,13 +397,7 @@ def rec_anime(ani_list, my_list, user_list):
     model.load_weights(CHECKPOINT_FILEPATH)
 
     if DEBUG:
-        plt.plot(history.history["loss"][0:-2])
-        plt.plot(history.history["val_loss"][0:-2])
-        plt.title("model loss")
-        plt.ylabel("loss")
-        plt.xlabel("epoch")
-        plt.legend(["train", "test"], loc="upper left")
-        plt.show()
+        plot_results(history)
 
 
     # Extracting weights from model
@@ -372,7 +417,7 @@ def rec_anime(ani_list, my_list, user_list):
     recommended_animes = get_recommended_animes(similar_users, rating_list, n=10)
     # getFavGenre(recommended_animes, plot=True)
 
-    print(f'\n> Top recommendations for user: {NAME}')
+    print(f"\n> Top recommendations for user: {MAL_my_data.get_my_info()['name']}")
     print(recommended_animes)
     
 
