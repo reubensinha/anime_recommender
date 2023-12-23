@@ -68,9 +68,9 @@ def scale_ratings(rating_list):
     max_rating = max(rating_list['rating'])
     rating_list['rating'] = rating_list["rating"].apply(lambda x: (x - min_rating) / (max_rating - min_rating)).values.astype(np.float64)
 
-    AvgRating = np.mean(rating_list['rating'])
-
+    
     if DEBUG:
+        AvgRating = np.mean(rating_list['rating'])
         print(f"Average Rating: {AvgRating}")
     
     return rating_list
@@ -243,7 +243,7 @@ def find_similar_users(item_input, user_encoded, user_weights, n=10,return_dist=
         print(f'{MAL_my_data.get_my_info()["name"]}!, Not Found in User list')
 
 
-def get_user_preferences(user_id, rating_list, verbose=0):
+def get_user_preferences(user_id, rating_list, ani_list, verbose=0):
     animes_watched_by_user = rating_list[rating_list.user_id==user_id]
     user_rating_percentile = np.percentile(animes_watched_by_user.rating, 75)
     animes_watched_by_user = animes_watched_by_user[animes_watched_by_user.rating >= user_rating_percentile]
@@ -252,13 +252,16 @@ def get_user_preferences(user_id, rating_list, verbose=0):
         .anime_id.values
     )
     
+    anime_df_rows = ani_list[ani_list["anime_id"].isin(top_animes_user)]
+    anime_df_rows = anime_df_rows[["English name", "Genres"]]
+    
 
     # anime_df_rows = pd.DataFrame(columns= ['anime_id'])
     # for anime_id in top_animes_user:
     #     anime = MAL_my_data.get_anime_info(anime_id)
 
     #     anime_df_rows = pd.concat([anime_df_rows, anime["anime_id"]])
-    anime_df_rows = top_animes_user['anime_id']
+    # anime_df_rows = top_animes_user['anime_id']
 
     
     if verbose != 0:
@@ -272,17 +275,20 @@ def get_user_preferences(user_id, rating_list, verbose=0):
     return anime_df_rows
 
 
-def get_recommended_animes(similar_users, rating_list, n=10):
+def get_recommended_animes(similar_users, rating_list, ani_list, n=10):
     global MY_ID
     recommended_animes = pd.DataFrame(columns= ['anime_id', 'name', 'genres', 'synopsis', 'size'])
     anime_list = pd.DataFrame(columns= ['anime_id'])
 
-    user_pref = get_user_preferences(MY_ID, rating_list, verbose=1)
+    user_pref = get_user_preferences(MY_ID, rating_list, ani_list, verbose=1)
     
-    for user_id in similar_users.similar_users.values:  
-        pref_list = get_user_preferences(int(user_id), rating_list, verbose=0)
+    i=0
+    for user_id in similar_users.similar_users.values:
+        i+=1
+        pref_list = get_user_preferences(int(user_id), rating_list, ani_list, verbose=0)
         pref_list = pref_list[~ pref_list.anime_id.isin(user_pref.anime_id.values)]
         anime_list = pd.concat([anime_list, pref_list])
+    print(f"You have {i} similar users.")
         
     sorted_list = anime_list.groupby(anime_list.columns.tolist(), as_index=False).size()
     sorted_list = sorted_list.sort_values(by= ['size']).head(n)
@@ -414,7 +420,7 @@ def rec_anime(ani_list, my_list, rating_list):
     if DEBUG:
         similar_users.head(5)
 
-    recommended_animes = get_recommended_animes(similar_users, rating_list, n=10)
+    recommended_animes = get_recommended_animes(similar_users, rating_list, ani_list, n=10)
     # getFavGenre(recommended_animes, plot=True)
 
     print(f"\n> Top recommendations for user: {MAL_my_data.get_my_info()['name']}")

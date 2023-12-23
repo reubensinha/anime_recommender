@@ -9,7 +9,7 @@ import pandas as pd
 
 
 DEBUG = 0
-CACHE = 1
+CACHE = 0
 
 # numeric_keys = {
 #     'genres': {},
@@ -73,7 +73,7 @@ def get_anime_data():
     
     rating_list = pd.read_csv('./data/users-score-2023.csv', usecols=["user_id", "anime_id", "rating"])
     
-    # User should rate atleast 400 animies
+    # User should rate atleast 400 animes
     n_ratings = rating_list['user_id'].value_counts()
     rating_list = rating_list[rating_list['user_id'].isin(n_ratings[n_ratings >= 400].index)].copy()
 
@@ -104,6 +104,9 @@ def select_input(select):
                 ani_list, rating_list = get_anime_data() # Dataframe
                 # TODO: Implement Timeout
                 my_list = MAL_my_data.get_my_anime_list() # Dataframe
+                
+                ani_list.to_csv('./cache/ani_list.csv')
+                rating_list.to_csv('./cache/user_list.csv')
                 my_list.to_csv('./cache/my_list.csv') # Cache my data
                 
             # TODO: return files
